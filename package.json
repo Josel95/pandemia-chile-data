@@ -1,0 +1,17 @@
+{
+  "name": "pandemia-chile-data",
+  "version": "0.1.0",
+  "description": "Collect and upload the pandemia chile app data",
+  "main": "index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "Josel95",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^0.21.1",
+    "firebase": "^8.2.5"
+  }
+}
