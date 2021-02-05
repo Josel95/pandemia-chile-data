@@ -185,10 +185,22 @@ const compareComunasWithSnapshot = (snapshot, comunas) => {
 }
 
 const uploadFirestore = async (comunas) => {
-    await comunas.forEach(async (object, index) => {
-        console.log(`${index + 1}/${comunas.length}`)
-        await db.collection('comunas').doc(object.name.toLowerCase()).set(object)
+    const promises = comunas.map((object, index) => {
+        return new Promise((resolve, reject) => {
+            db.collection('comunas')
+                .doc(object.name.toLowerCase())
+                .set(object)
+                .then(() => {
+                    console.log(`comuna: ${object.name} -- ${index + 1}/${comunas.length}`)
+                    resolve()
+                })
+                .catch(() => {
+                    reject()
+                })
+        })
     })
+
+    await Promise.all(promises)
 }
 
 (async () => {
@@ -209,6 +221,7 @@ const uploadFirestore = async (comunas) => {
         await uploadFirestore(comunas)
     }
 
+    console.log("Close connection")
     // Close firebase connection
     firebaseApp.delete()
 
