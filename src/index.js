@@ -117,9 +117,11 @@ const getNearLocations = (currentLocation, locations, top) => {
 }
 
 const getNearComunas = (comunas, top = 10) => {
-    return comunas.map(comuna => {
+    const wtf = [...comunas]
+
+    return wtf.map(comuna => {        
         const { latitude, longitude } = comuna
-    
+
         const nearComunas = getNearLocations({ latitude, longitude }, comunas, top)
     
         return {
@@ -209,7 +211,7 @@ const uploadFirestore = async (comunas) => {
     const pasosByComuna = getPasosByComuna(minsalData)
     const consolidatedData = consolidateData(pasosByComuna, dataComunas)
     const convertedCoords = convertCoords(consolidatedData)
-    const comunas = getNearComunas(convertedCoords)
+    const comunas = getNearComunas(convertedCoords, 15)
 
     // Check what data has changed from last run
 
