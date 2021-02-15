@@ -4,40 +4,14 @@ const fs = require('fs')
 
 const path = require('path')
 
-const firebase = require("firebase")
-
-require("firebase/firestore")
-
-// // Create and Deploy Your First Cloud Functions
-// // https://firebase.google.com/docs/functions/write-firebase-functions
-//
-// exports.helloWorld = functions.https.onRequest((request, response) => {
-//   functions.logger.info("Hello logs!", {structuredData: true});
-//   response.send("Hello from Firebase!");
-// });
-
-/**
- * This file have to contain the firebase credentials with the following format:
- * Documentation: https://firebase.google.com/docs/web/setup?hl=es
- *  {
- *      "apiKey": "AIzaSyDOCAbC123dEf456GhI789jKl01-MnO",
- *      "authDomain": "myapp-project-123.firebaseapp.com",
- *      "databaseURL": "https://myapp-project-123.firebaseio.com",
- *      "projectId": "myapp-project-123",
- *      "storageBucket": "myapp-project-123.appspot.com",
- *      "messagingSenderId": "65211879809",
- *      "appId": "1:65211879909:web:3ae38ef1cdcb2e01fe5f0c",
- *      "measurementId": "G-8GSGZQ44ST"
- *  }
- */
-const firebaseCredentials = require('./firebaseCredentials.json')
+const firebase = require('firebase-admin')
 
 const axios = require('axios')
 
 const dataComunas = require('./data/dataComunas.json')
 
 // Firebase initialization
-const firebaseApp = firebase.initializeApp(firebaseCredentials)
+const firebaseApp = firebase.initializeApp()
 
 const db = firebase.firestore()
 
@@ -79,7 +53,7 @@ const getPasosByComuna = (minsalData) => {
         if (!item) return object
         return {
             ...object,
-            [item?.key]: item?.value
+            [item.key]: item.value
         }
     }, {})
 }
@@ -215,7 +189,7 @@ const uploadFirestore = async (comunas) => {
     await Promise.all(promises)
 }
 
-(async () => {
+const main = async () => {
     // Get, transform and consolidate data
     const minsalData = await downloadMinsalData()
     const pasosByComuna = getPasosByComuna(minsalData)
@@ -223,19 +197,15 @@ const uploadFirestore = async (comunas) => {
     const convertedCoords = convertCoords(consolidatedData)
     const comunas = getNearComunas(convertedCoords, 15)
 
-    // Check what data has changed from last run
+    await uploadFirestore(comunas)
 
-    if (checkSnapshotExists()) {
-        const snapshotComunas = readSnapshot()
-        const changedComunas = compareComunasWithSnapshot(snapshotComunas, comunas)
-        await uploadFirestore(changedComunas)
-    }else {
-        await uploadFirestore(comunas)
-    }
-
-    console.log("Close connection")
     // Close firebase connection
     firebaseApp.delete()
 
     saveSnapshot(comunas)
-})()
+}
+
+exports.pandemiaDataScheduled = functions.pubsub.schedule('every 60 minutes').onRun((context) => {
+    main()
+    return null;
+});
