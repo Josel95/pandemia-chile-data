@@ -199,9 +199,6 @@ const main = async () => {
 
     await uploadFirestore(comunas)
 
-    // Close firebase connection
-    firebaseApp.delete()
-
     saveSnapshot(comunas)
 }
 
