@@ -148,28 +148,6 @@ const convertCoords = (comunas) => {
     })
 }
 
-const saveSnapshot = (comunas) => {
-    fs.writeFileSync(`${__dirname}/data/snapshot.json`, JSON.stringify(comunas))
-}
-
-const readSnapshot = () => {
-    const data = fs.readFileSync(`${__dirname}/data/snapshot.json`)
-    return JSON.parse(data)
-}
-
-const checkSnapshotExists = () => {
-    return fs.existsSync(`${__dirname}/data/snapshot.json`)
-}
-
-// Returns the elements where property paso has changed
-const compareComunasWithSnapshot = (snapshot, comunas) => {
-    return comunas.filter(comuna => {
-        const comunaSnapshot = snapshot.find(s => s.id === comuna.id)
-
-        return comuna.paso != comunaSnapshot.paso
-    })
-}
-
 const uploadFirestore = async (comunas) => {
     const promises = comunas.map((object, index) => {
         return new Promise((resolve, reject) => {
@@ -198,11 +176,17 @@ const main = async () => {
     const comunas = getNearComunas(convertedCoords, 15)
 
     await uploadFirestore(comunas)
-
-    saveSnapshot(comunas)
 }
 
-exports.pandemiaDataScheduled = functions.pubsub.schedule('every 60 minutes').onRun((context) => {
-    main()
+exports.pandemiaDataScheduled = functions.pubsub.schedule('every 60 minutes').onRun(async (context) => {
+    await main()
     return null;
 });
+
+exports.pandemiaData = functions.https.onRequest(async (req, res) => {
+    await main()
+
+    res.json({
+        executed: true
+    })
+})
