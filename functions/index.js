@@ -1,33 +1,13 @@
-const fs = require('fs')
+const functions = require("firebase-functions");
 
-const path = require('path')
-
-const firebase = require("firebase")
-
-require("firebase/firestore")
-
-/**
- * This file have to contain the firebase credentials with the following format:
- * Documentation: https://firebase.google.com/docs/web/setup?hl=es
- *  {
- *      "apiKey": "AIzaSyDOCAbC123dEf456GhI789jKl01-MnO",
- *      "authDomain": "myapp-project-123.firebaseapp.com",
- *      "databaseURL": "https://myapp-project-123.firebaseio.com",
- *      "projectId": "myapp-project-123",
- *      "storageBucket": "myapp-project-123.appspot.com",
- *      "messagingSenderId": "65211879809",
- *      "appId": "1:65211879909:web:3ae38ef1cdcb2e01fe5f0c",
- *      "measurementId": "G-8GSGZQ44ST"
- *  }
- */
-const firebaseCredentials = require('./firebaseCredentials.json')
-
-const axios = require('axios')
+const firebase = require('firebase-admin')
 
 const dataComunas = require('./data/dataComunas.json')
 
+const { Octokit } = require('@octokit/rest')
+
 // Firebase initialization
-const firebaseApp = firebase.initializeApp(firebaseCredentials)
+firebase.initializeApp()
 
 const db = firebase.firestore()
 
@@ -35,11 +15,17 @@ const db = firebase.firestore()
 // https://github.com/MinCiencia/Datos-COVID19
 
 const downloadMinsalData = async () => {
-    const url = 'https://raw.githubusercontent.com/MinCiencia/Datos-COVID19/master/input/Paso_a_paso/paso_a_paso.csv'
+    const octokit = new Octokit()
 
-    const { data } = await axios.get(url)
+    const { data: { sha, content, encoding } } = await octokit.repos.getContent({
+        owner: 'MinCiencia',
+        repo: 'Datos-COVID19',
+        path: 'input/Paso_a_paso/paso_a_paso.csv'
+    })
 
-    return data
+    const decodedContent = Buffer.from(content, encoding).toString()
+
+    return {sha, decodedContent}
 }
 
 // Get the comuna id and the current paso
@@ -69,7 +55,7 @@ const getPasosByComuna = (minsalData) => {
         if (!item) return object
         return {
             ...object,
-            [item?.key]: item?.value
+            [item.key]: item.value
         }
     }, {})
 }
@@ -117,9 +103,11 @@ const getNearLocations = (currentLocation, locations, top) => {
 }
 
 const getNearComunas = (comunas, top = 10) => {
-    return comunas.map(comuna => {
+    const wtf = [...comunas]
+
+    return wtf.map(comuna => {        
         const { latitude, longitude } = comuna
-    
+
         const nearComunas = getNearLocations({ latitude, longitude }, comunas, top)
     
         return {
@@ -162,28 +150,6 @@ const convertCoords = (comunas) => {
     })
 }
 
-const saveSnapshot = (comunas) => {
-    fs.writeFileSync(`${__dirname}/data/snapshot.json`, JSON.stringify(comunas))
-}
-
-const readSnapshot = () => {
-    const data = fs.readFileSync(`${__dirname}/data/snapshot.json`)
-    return JSON.parse(data)
-}
-
-const checkSnapshotExists = () => {
-    return fs.existsSync(`${__dirname}/data/snapshot.json`)
-}
-
-// Returns the elements where property paso has changed
-const compareComunasWithSnapshot = (snapshot, comunas) => {
-    return comunas.filter(comuna => {
-        const comunaSnapshot = snapshot.find(s => s.id === comuna.id)
-
-        return comuna.paso != comunaSnapshot.paso
-    })
-}
-
 const uploadFirestore = async (comunas) => {
     const promises = comunas.map((object, index) => {
         return new Promise((resolve, reject) => {
@@ -203,27 +169,60 @@ const uploadFirestore = async (comunas) => {
     await Promise.all(promises)
 }
 
-(async () => {
+const getLastSha = async () => {
+    const snapshot = await db.
+        collection('lastSha')
+        .doc('lastSha')
+        .get('sha')
+
+    const sha = snapshot.get('sha')
+
+    return sha
+}
+
+const setLastSha = async (sha) => {
+    await db.collection('lastSha')
+        .doc('lastSha')
+        .set({
+            sha
+        })
+}
+
+const compareWithLastSha = async (sha) => {
+    const lastSha = await getLastSha()
+    return lastSha === sha
+}
+
+const main = async () => {
     // Get, transform and consolidate data
-    const minsalData = await downloadMinsalData()
+    const {sha, decodedContent: minsalData} = await downloadMinsalData()
+
+    if(await compareWithLastSha(sha)) {
+        console.info('The data has not changed')
+        return
+    }
+
     const pasosByComuna = getPasosByComuna(minsalData)
     const consolidatedData = consolidateData(pasosByComuna, dataComunas)
     const convertedCoords = convertCoords(consolidatedData)
-    const comunas = getNearComunas(convertedCoords)
+    const comunas = getNearComunas(convertedCoords, 15)
 
-    // Check what data has changed from last run
+    console.info('Uploading new data')
+    await uploadFirestore(comunas)
 
-    if (checkSnapshotExists()) {
-        const snapshotComunas = readSnapshot()
-        const changedComunas = compareComunasWithSnapshot(snapshotComunas, comunas)
-        await uploadFirestore(changedComunas)
-    }else {
-        await uploadFirestore(comunas)
-    }
+    await setLastSha(sha)
+}
 
-    console.log("Close connection")
-    // Close firebase connection
-    firebaseApp.delete()
+exports.pandemiaDataScheduled = functions.pubsub.schedule('every 60 minutes').onRun(async (context) => {
+    await main()
+    return null;
+});
 
-    saveSnapshot(comunas)
-})()
+/* Test only */
+// exports.pandemiaData = functions.https.onRequest(async (req, res) => {
+//     await main()
+
+//     res.json({
+//         executed: true
+//     })
+// })
