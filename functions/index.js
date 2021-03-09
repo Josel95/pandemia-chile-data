@@ -253,10 +253,18 @@ const getNearComunas = (comunas, top = 10) => {
         const { latitude, longitude } = comuna
 
         const nearComunas = getNearLocations({ latitude, longitude }, comunas, top)
-    
+
+        const reducedComunas = nearComunas.map((comuna) => {
+            return {
+                id: comuna.id,
+                name: comuna.name,
+                paso: comuna.paso
+            }
+        })
+
         return {
             ...comuna,
-            nearComunas
+            nearComunas: reducedComunas
         }
     })
 }
@@ -268,7 +276,7 @@ const consolidateData = (pasosByComuna, totalCasesByComuna, activeCasesByComuna,
             paso: pasosByComuna[+comuna.id],
             totalCases: totalCasesByComuna[+comuna.id],
             activeCases: activeCasesByComuna[+comuna.id],
-            deadByComuna: deadByComuna[+comuna.id]
+            deathCases: deadByComuna[+comuna.id]
         }
     })
 }
@@ -397,11 +405,11 @@ exports.pandemiaDataScheduled = functions.pubsub.schedule('every 60 minutes').on
 });
 
 /* Test only */
-// exports.pandemiaData = functions.runWith({ timeoutSeconds: 120 }).https.onRequest(async (req, res) => {
-//     const data = await main()
+exports.pandemiaData = functions.runWith({ timeoutSeconds: 120 }).https.onRequest(async (req, res) => {
+    const data = await main()
 
-//     res.json({
-//         executed: true,
-//         data
-//     })
-// })
+    res.json({
+        executed: true,
+        data
+    })
+})
