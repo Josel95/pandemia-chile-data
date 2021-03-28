@@ -11,16 +11,55 @@ firebase.initializeApp()
 
 const db = firebase.firestore()
 
-// Download csv from minsal github
+// Download csv from MinCiencia github
 // https://github.com/MinCiencia/Datos-COVID19
 
-const downloadMinsalData = async () => {
-    const octokit = new Octokit()
+const octokit = new Octokit()
 
+const downloadPasoComunas = async () => {
     const { data: { sha, content, encoding } } = await octokit.repos.getContent({
         owner: 'MinCiencia',
         repo: 'Datos-COVID19',
         path: 'input/Paso_a_paso/paso_a_paso.csv'
+    })
+
+    const decodedContent = Buffer.from(content, encoding).toString()
+
+    return {sha, decodedContent}
+}
+
+// Total cases by comuna
+const downloadProduct1 = async () => {
+    const { data: { sha, content, encoding } } = await octokit.repos.getContent({
+        owner: 'MinCiencia',
+        repo: 'Datos-COVID19',
+        path: 'output/producto1/Covid-19.csv'
+    })
+
+    const decodedContent = Buffer.from(content, encoding).toString()
+
+    return {sha, decodedContent}
+}
+
+// Active cases by comuna
+const downloadProduct19 = async () => {
+    const { data: { sha, content, encoding } } = await octokit.repos.getContent({
+        owner: 'MinCiencia',
+        repo: 'Datos-COVID19',
+        path: 'output/producto19/CasosActivosPorComuna.csv'
+    })
+
+    const decodedContent = Buffer.from(content, encoding).toString()
+
+    return {sha, decodedContent}
+}
+
+// Dead by comuna
+const downloadProduct38 = async () => {
+    const { data: { sha, content, encoding } } = await octokit.repos.getContent({
+        owner: 'MinCiencia',
+        repo: 'Datos-COVID19',
+        path: 'output/producto38/CasosFallecidosPorComuna.csv'
     })
 
     const decodedContent = Buffer.from(content, encoding).toString()
@@ -50,6 +89,111 @@ const getPasosByComuna = (minsalData) => {
         return {
             key: idComuna,
             value: paso
+        }
+    }).reduce((object, item) => {
+        if (!item) return object
+        return {
+            ...object,
+            [item.key]: item.value
+        }
+    }, {})
+}
+
+const getTotalCasesByComuna = (data) => {
+    const lines = data.split("\n")
+
+    return lines.map((line, index) => {
+        // If line is empty
+        if (line === "") {
+            return
+        }
+
+        // Header of csv
+        if (index === 0) {
+            return
+        }
+
+        const columns = line.split(',')
+        const idComuna = parseInt(columns[3])
+        const totalCases = parseInt(columns[columns.length - 2])
+
+        if(isNaN(idComuna)) {
+            return null
+        }
+
+        return {
+            key: idComuna,
+            value: totalCases
+        }
+    }).reduce((object, item) => {
+        if (!item) return object
+        return {
+            ...object,
+            [item.key]: item.value
+        }
+    }, {})
+}
+
+const getActiveCasesByComuna = (data) => {
+    const lines = data.split("\n")
+
+    return lines.map((line, index) => {
+        // If line is empty
+        if (line === "") {
+            return
+        }
+
+        // Header of csv
+        if (index === 0) {
+            return
+        }
+
+        const columns = line.split(',')
+        const idComuna = parseInt(columns[3])
+        const activeCases = parseInt(columns[columns.length - 1])
+
+        if(isNaN(idComuna)) {
+            return null
+        }
+
+        return {
+            key: idComuna,
+            value: activeCases
+        }
+    }).reduce((object, item) => {
+        if (!item) return object
+        return {
+            ...object,
+            [item.key]: item.value
+        }
+    }, {})
+}
+
+const getDeadByComuna = (data) => {
+    const lines = data.split("\n")
+
+    return lines.map((line, index) => {
+        // If line is empty
+        if (line === "") {
+            return
+        }
+
+        // Header of csv
+        if (index === 0) {
+            return
+        }
+
+        const columns = line.split(',')
+        const idComuna = parseInt(columns[3])
+        const deaths = parseInt(columns[columns.length - 1])
+
+        if(isNaN(idComuna)) {
+            return null
+        }
+
+        return {
+            key: idComuna,
+            value: deaths
         }
     }).reduce((object, item) => {
         if (!item) return object
@@ -109,19 +253,30 @@ const getNearComunas = (comunas, top = 10) => {
         const { latitude, longitude } = comuna
 
         const nearComunas = getNearLocations({ latitude, longitude }, comunas, top)
-    
+
+        const reducedComunas = nearComunas.map((comuna) => {
+            return {
+                id: comuna.id,
+                name: comuna.name,
+                paso: comuna.paso
+            }
+        })
+
         return {
             ...comuna,
-            nearComunas
+            nearComunas: reducedComunas
         }
     })
 }
 
-const consolidateData = (pasosByComuna, dataComunas) => {
+const consolidateData = (pasosByComuna, totalCasesByComuna, activeCasesByComuna, deadByComuna, dataComunas) => {
     return dataComunas.map(comuna => {
         return {
             ...comuna,
-            paso: pasosByComuna[+comuna.id]
+            paso: pasosByComuna[+comuna.id],
+            totalCases: totalCasesByComuna[+comuna.id],
+            activeCases: activeCasesByComuna[+comuna.id],
+            deathCases: deadByComuna[+comuna.id]
         }
     })
 }
@@ -169,48 +324,79 @@ const uploadFirestore = async (comunas) => {
     await Promise.all(promises)
 }
 
-const getLastSha = async () => {
+const getLastShas = async () => {
     const snapshot = await db.
-        collection('lastSha')
-        .doc('lastSha')
-        .get('sha')
+        collection('lastShas')
+        .doc('lastShas')
+        .get('shas')
 
-    const sha = snapshot.get('sha')
+    const shas = snapshot.get('shas')
 
-    return sha
+    return shas
 }
 
-const setLastSha = async (sha) => {
-    await db.collection('lastSha')
-        .doc('lastSha')
+const setLastShas = async (shas) => {
+    await db.collection('lastShas')
+        .doc('lastShas')
         .set({
-            sha
+            shas,
+            changeDatetime: firebase.firestore.Timestamp.fromDate(new Date())
         })
 }
 
-const compareWithLastSha = async (sha) => {
-    const lastSha = await getLastSha()
-    return lastSha === sha
+const compareWithLastSha = async (shas) => {
+    const lastShas = await getLastShas()
+
+    if(!lastShas) {
+        return false
+    }
+
+    const comparisonResult = Object.keys(shas).map(shaKey => {
+        return lastShas[shaKey] !== shas[shaKey] 
+    })
+
+    // any is true return true
+    return !comparisonResult.some(result => result === true)
 }
 
 const main = async () => {
-    // Get, transform and consolidate data
-    const {sha, decodedContent: minsalData} = await downloadMinsalData()
+    // Download paso by comuna
+    const {sha: pasoComunasSha, decodedContent: pasoComunasData} = await downloadPasoComunas()
 
-    if(await compareWithLastSha(sha)) {
+    // Download total cases by comuna
+    const {sha: product1Sha, decodedContent: product1Data} = await downloadProduct1()
+
+    // Download active cases by comuna
+    const {sha: product19Sha, decodedContent: product19Data} = await downloadProduct19()
+
+    // Download dead by comuna
+    const {sha: product38Sha, decodedContent: product38Data} = await downloadProduct38()
+    
+    const shas = {
+        pasoComunasSha,
+        product1Sha,
+        product19Sha,
+        product38Sha
+    }
+
+    if(await compareWithLastSha(shas)) {
         console.info('The data has not changed')
         return
     }
-
-    const pasosByComuna = getPasosByComuna(minsalData)
-    const consolidatedData = consolidateData(pasosByComuna, dataComunas)
+    
+    const pasosByComuna = getPasosByComuna(pasoComunasData)
+    const totalCasesByComuna = getTotalCasesByComuna(product1Data)
+    const activeCasesByComuna = getActiveCasesByComuna(product19Data)
+    const deadByComuna = getDeadByComuna(product38Data)
+    
+    const consolidatedData = consolidateData(pasosByComuna, totalCasesByComuna, activeCasesByComuna, deadByComuna, dataComunas)
     const convertedCoords = convertCoords(consolidatedData)
     const comunas = getNearComunas(convertedCoords, 15)
 
     console.info('Uploading new data')
     await uploadFirestore(comunas)
 
-    await setLastSha(sha)
+    await setLastShas(shas)
 }
 
 exports.pandemiaDataScheduled = functions.pubsub.schedule('every 60 minutes').onRun(async (context) => {
@@ -219,10 +405,11 @@ exports.pandemiaDataScheduled = functions.pubsub.schedule('every 60 minutes').on
 });
 
 /* Test only */
-// exports.pandemiaData = functions.https.onRequest(async (req, res) => {
-//     await main()
+exports.pandemiaData = functions.runWith({ timeoutSeconds: 120 }).https.onRequest(async (req, res) => {
+    const data = await main()
 
-//     res.json({
-//         executed: true
-//     })
-// })
+    res.json({
+        executed: true,
+        data
+    })
+})
