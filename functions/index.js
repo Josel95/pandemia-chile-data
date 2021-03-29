@@ -405,11 +405,13 @@ exports.pandemiaDataScheduled = functions.pubsub.schedule('every 60 minutes').on
 });
 
 /* Test only */
-exports.pandemiaData = functions.runWith({ timeoutSeconds: 120 }).https.onRequest(async (req, res) => {
-    const data = await main()
-
-    res.json({
-        executed: true,
-        data
+if(process.env.FUNCTIONS_EMULATOR) {
+    exports.pandemiaData = functions.runWith({ timeoutSeconds: 120 }).https.onRequest(async (req, res) => {
+        const data = await main()
+    
+        res.json({
+            executed: true,
+            data
+        })
     })
-})
+}
