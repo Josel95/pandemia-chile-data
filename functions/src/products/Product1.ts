@@ -1,4 +1,6 @@
-import { ProductBase, ProductCasesResponse } from './ProductBase'
+import { ProductCasesResponse } from '../types'
+
+import { ProductBase } from './ProductBase'
 
 export class Product1 extends ProductBase<ProductCasesResponse> {
     constructor() {

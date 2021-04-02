@@ -1,19 +1,6 @@
 import { Octokit } from '@octokit/rest'
 
-export interface ProductCasesResponse {
-    [locationCode: number]: {
-        locationName: string
-        currentCases: number
-        historicalCases: {
-            [date: string]: number
-        } | null
-    }
-}
-
-export interface DataResponse<T> {
-    sha: string | null,
-    content: T | null
-}
+import { DataResponse } from '../types'
 
 export interface Product<T> {
     download: () => void
