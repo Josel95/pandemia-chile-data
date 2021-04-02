@@ -1,8 +1,8 @@
 import { ProductBase, ProductCasesResponse } from './ProductBase'
 
 export class Product19 extends ProductBase<ProductCasesResponse> {
-    constructor(path: string) {
-        super('product19', path)
+    constructor() {
+        super('product19', 'output/producto19/CasosActivosPorComuna.csv')
     }
 
     process() {
